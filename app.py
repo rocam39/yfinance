@@ -14,8 +14,13 @@ st.title("1-Minute Candle Signal Monitor")
 # ---------------- Sidebar ----------------
 
 with st.sidebar:
-    ticker_input = st.text_input("NSE/BSE ticker", value="RELIANCE.NS",
-                                 help="e.g. RELIANCE.NS or RELIANCE.BO")
+    instrument_type = st.radio("Instrument", ["Stock", "Index"], horizontal=True)
+    if instrument_type == "Index":
+        index_name = st.selectbox("Index", list(S.INDICES))
+        ticker_input = S.INDICES[index_name]
+    else:
+        ticker_input = st.text_input("NSE/BSE ticker", value="RELIANCE.NS",
+                                     help="e.g. RELIANCE.NS or RELIANCE.BO")
     running = st.toggle("Start monitoring", value=False)
     rows_to_show = st.slider("Candles to display", 10, 200, 40)
     st.caption(f"Refreshes every {S.POLL_INTERVAL_SECONDS}s. "
@@ -49,7 +54,7 @@ def color_signal(col):
 def monitor(sym: str):
     try:
         candles = S.fetch_candles(sym)
-        df = S.compute_signals(candles)
+        df = S.compute_signals(candles, sym)
     except Exception as exc:
         st.error(f"Data error: {exc}. Retrying in {S.POLL_INTERVAL_SECONDS}s.")
         return

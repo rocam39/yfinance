@@ -5,6 +5,7 @@ Edit this file to change how signals are generated. The Streamlit
 frontend (app.py) only displays whatever this module produces.
 
 Public API used by app.py:
+    INDICES                     -> dict of index name -> Yahoo symbol
     normalize_ticker(text)      -> str
     is_market_open(now=None)    -> bool
     fetch_candles(symbol)       -> DataFrame of COMPLETED 1-min candles
@@ -34,7 +35,18 @@ CANDLE_GRACE_SECONDS = 15         # wait this long after a minute ends
 MARKET_OPEN = (9, 15)             # IST (hour, minute)
 MARKET_CLOSE = (15, 30)
 
-TICK_SIZE = 0.05                  # prices are rounded to this before comparing
+TICK_SIZE = 0.05                  # stocks: prices rounded to this before comparing
+TICK_SIZE_INDEX = 0.01            # indices: values are quoted to 2 decimals
+
+# Indices offered in the frontend dropdown: display name -> Yahoo symbol.
+# Add or remove entries here and the dropdown updates automatically.
+INDICES = {
+    "Nifty 50": "^NSEI",
+    "Sensex": "^BSESN",
+    "Bank Nifty": "^NSEBANK",
+    "Nifty IT": "^CNXIT",
+    "Nifty Next 50": "^NSMIDCP",
+}
 
 # What to emit when a condition is met. Swap these to reverse the strategy.
 #   Conventional (trend):       open==low  & gap up   -> BUY
@@ -57,9 +69,15 @@ REQUIRE_SAME_SESSION = False      # False: first candle of the day is compared
 
 def normalize_ticker(text: str) -> str:
     symbol = text.strip().upper()
+    if symbol.startswith("^"):          # index symbols take no suffix
+        return symbol
     if symbol and not symbol.endswith((".NS", ".BO")):
         symbol += DEFAULT_SUFFIX
     return symbol
+
+
+def tick_size_for(symbol: str) -> float:
+    return TICK_SIZE_INDEX if symbol.startswith("^") else TICK_SIZE
 
 
 def is_market_open(now: pd.Timestamp | None = None) -> bool:
@@ -73,9 +91,9 @@ def is_market_open(now: pd.Timestamp | None = None) -> bool:
     return start <= now < end
 
 
-def _tick(price: float) -> float:
+def _tick(price: float, tick: float) -> float:
     """Round a price to the nearest tick so comparisons are exact."""
-    return round(round(price / TICK_SIZE) * TICK_SIZE, 4)
+    return round(round(price / tick) * tick, 4)
 
 
 # =====================================================================
@@ -120,20 +138,22 @@ def fetch_candles(symbol: str) -> pd.DataFrame:
 # STRATEGY  (edit this part to change the rules)
 # =====================================================================
 
-def generate_signal(candle: pd.Series, previous_close: float) -> str:
+def generate_signal(candle: pd.Series, previous_close: float,
+                    tick: float = TICK_SIZE) -> str:
     """
     Return "BUY", "SELL" or "HOLD" for one completed candle.
 
     candle          : row with Open / High / Low / Close (/ Volume)
     previous_close  : close of the candle before it (NaN if unavailable)
+    tick            : tick size used to round prices before comparing
     """
     if pd.isna(previous_close):
         return "HOLD"
 
-    o = _tick(float(candle["Open"]))
-    h = _tick(float(candle["High"]))
-    l = _tick(float(candle["Low"]))
-    prev = _tick(float(previous_close))
+    o = _tick(float(candle["Open"]), tick)
+    h = _tick(float(candle["High"]), tick)
+    l = _tick(float(candle["Low"]), tick)
+    prev = _tick(float(previous_close), tick)
 
     if SKIP_FLAT_CANDLES and h == l:
         return "HOLD"
@@ -153,8 +173,9 @@ def generate_signal(candle: pd.Series, previous_close: float) -> str:
     return "HOLD"
 
 
-def compute_signals(candles: pd.DataFrame) -> pd.DataFrame:
+def compute_signals(candles: pd.DataFrame, symbol: str = "") -> pd.DataFrame:
     """Add PrevClose and Signal columns to every candle."""
+    tick = tick_size_for(symbol)
     df = candles.copy()
     df["PrevClose"] = df["Close"].shift(1)
 
@@ -164,6 +185,6 @@ def compute_signals(candles: pd.DataFrame) -> pd.DataFrame:
         df.loc[new_session, "PrevClose"] = float("nan")
 
     df["Signal"] = [
-        generate_signal(row, row["PrevClose"]) for _, row in df.iterrows()
+        generate_signal(row, row["PrevClose"], tick) for _, row in df.iterrows()
     ]
     return df
