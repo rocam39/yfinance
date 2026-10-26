@@ -36,12 +36,14 @@ MARKET_CLOSE = (15, 30)
 
 TICK_SIZE = 0.05                  # prices are rounded to this before comparing
 
-# What to emit when a condition is met. Flip these to reverse the strategy.
-#   Current (reversal / fade):  open==low & gap up -> SELL
-#                               open==high & gap down -> BUY
-#   Conventional (trend):       set LOW -> "BUY" and HIGH -> "SELL"
-SIGNAL_WHEN_OPEN_EQUALS_LOW = "SELL"
-SIGNAL_WHEN_OPEN_EQUALS_HIGH = "BUY"
+# What to emit when a condition is met. Swap these to reverse the strategy.
+#   Conventional (trend):       open==low  & gap up   -> BUY
+#                               open==high & gap down -> SELL
+#   Reversal (fade):            set LOW -> "SELL" and HIGH -> "BUY"
+SIGNAL_WHEN_OPEN_EQUALS_LOW = "BUY"
+SIGNAL_WHEN_OPEN_EQUALS_HIGH = "SELL"
+
+
 
 REQUIRE_GAP = True                # open must be above/below previous close
 SKIP_FLAT_CANDLES = True          # ignore candles where High == Low
